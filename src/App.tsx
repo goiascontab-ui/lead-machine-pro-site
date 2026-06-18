@@ -602,6 +602,264 @@ function Benefits() {
   );
 }
 
+// ─── Checkout Modal ───────────────────────────────────────────────────────────
+const EDGE_URL = "https://ibjpqlublpptcbluhqnt.supabase.co/functions/v1";
+
+type CheckoutStep = "form" | "pix" | "card_redirect" | "success" | "error";
+
+interface CheckoutModalProps {
+  plan: string; // "pro" | "promax"
+  billing: string; // "mensal" | "trimestral" | "anual"
+  planName: string;
+  price: string;
+  onClose: () => void;
+}
+
+function CheckoutModal({ plan, billing, planName, price, onClose }: CheckoutModalProps) {
+  const [step, setStep] = useState<CheckoutStep>("form");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [paymentId, setPaymentId] = useState("");
+  const [qrCode, setQrCode] = useState("");
+  const [qrText, setQrText] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const featureTier = plan === "promax" ? "pro_max" : "pro";
+  const planoKey = billing; // mensal | trimestral | anual
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  async function handlePix() {
+    const wpp = whatsapp.replace(/\D/g, "");
+    if (wpp.length < 10) return;
+
+    try {
+      const res = await fetch(`${EDGE_URL}/criar-pix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plano: planoKey,
+          feature_tier: featureTier,
+          hwid: "SITE_PURCHASE",
+          whatsapp: wpp,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok || (!data.qr_code && !data.qr_base64)) {
+        setErrorMsg(data.error || "Erro ao gerar Pix. Tente novamente.");
+        setStep("error");
+        return;
+      }
+      setQrCode(data.qr_base64 || data.qr_code_base64 || "");
+      setQrText(data.qr_code || "");
+      setPaymentId(data.payment_id || "");
+      setStep("pix");
+      startPolling(data.payment_id);
+    } catch {
+      setErrorMsg("Erro de conexão. Verifique sua internet e tente novamente.");
+      setStep("error");
+    }
+  }
+
+  async function handleCard() {
+    const wpp = whatsapp.replace(/\D/g, "");
+    if (wpp.length < 10) return;
+
+    try {
+      const res = await fetch(`${EDGE_URL}/criar-pix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "criar_checkout_cartao",
+          plano: planoKey,
+          feature_tier: featureTier,
+          hwid: "SITE_PURCHASE",
+          whatsapp: wpp,
+        }),
+      });
+      const data = await res.json();
+      if (data.init_point) {
+        window.open(data.init_point, "_blank");
+        setStep("card_redirect");
+        if (data.payment_id) startPolling(data.payment_id);
+      } else {
+        setErrorMsg(data.error || "Erro ao gerar checkout. Tente novamente.");
+        setStep("error");
+      }
+    } catch {
+      setErrorMsg("Erro de conexão. Tente novamente.");
+      setStep("error");
+    }
+  }
+
+  function startPolling(pid: string) {
+    setPolling(true);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${EDGE_URL}/criar-pix`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "status", payment_id: pid }),
+        });
+        const data = await res.json();
+        if (data.status === "approved") {
+          clearInterval(pollRef.current!);
+          setPolling(false);
+          setStep("success");
+        }
+      } catch { /* ignora erro de rede no polling */ }
+    }, 3000);
+  }
+
+  function copyPix() {
+    navigator.clipboard.writeText(qrText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const wppFormatted = whatsapp.replace(/\D/g, "");
+  const wppValid = wppFormatted.length >= 10;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.85)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md relative"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors">
+          <X size={20} />
+        </button>
+
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-lg bg-[#22c55e] flex items-center justify-center">
+              <Zap size={12} className="text-black" />
+            </div>
+            <span className="text-xs text-white/40 uppercase tracking-wider font-bold">Lead Machine PRO</span>
+          </div>
+          <h3 className="text-xl font-extrabold text-white">
+            Plano {planName} — <span className="text-[#22c55e]">{price}<span className="text-sm font-normal text-white/40">/{billing === "mensal" ? "mês" : billing === "trimestral" ? "trim." : "ano"}</span></span>
+          </h3>
+        </div>
+
+        {/* Step: form */}
+        {step === "form" && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-white/50 mb-1.5 block">Seu WhatsApp (para receber a chave de ativação)</label>
+              <input
+                type="tel"
+                placeholder="(62) 99999-9999"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
+                className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 text-sm focus:outline-none focus:border-[#22c55e]/50"
+              />
+              <p className="text-xs text-white/30 mt-1.5">Após o pagamento, sua chave de ativação será enviada para este número.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handlePix}
+                disabled={!wppValid}
+                className="flex flex-col items-center gap-1.5 bg-[#00b4d8]/10 border border-[#00b4d8]/30 hover:border-[#00b4d8]/60 rounded-xl p-4 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span className="text-2xl">⚡</span>
+                <span className="text-sm font-bold text-white">Pagar com Pix</span>
+                <span className="text-xs text-white/40">Aprovação imediata</span>
+              </button>
+              <button
+                onClick={handleCard}
+                disabled={!wppValid}
+                className="flex flex-col items-center gap-1.5 bg-[#6c63ff]/10 border border-[#6c63ff]/30 hover:border-[#6c63ff]/60 rounded-xl p-4 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span className="text-2xl">💳</span>
+                <span className="text-sm font-bold text-white">Cartão de crédito</span>
+                <span className="text-xs text-white/40">Parcele em até 12x</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step: pix */}
+        {step === "pix" && (
+          <div className="space-y-4 text-center">
+            <p className="text-sm text-white/60">Escaneie o QR Code ou copie o código Pix:</p>
+            {qrCode && (
+              <img src={`data:image/png;base64,${qrCode}`} alt="QR Code Pix" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+            )}
+            {qrText && (
+              <button
+                onClick={copyPix}
+                className="w-full bg-[#22c55e]/10 border border-[#22c55e]/30 hover:border-[#22c55e]/60 text-[#22c55e] text-sm font-bold py-3 rounded-xl transition-all"
+              >
+                {copied ? "✓ Copiado!" : "Copiar código Pix"}
+              </button>
+            )}
+            <p className="text-xs text-white/30 flex items-center justify-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${polling ? "bg-yellow-400 animate-pulse" : "bg-white/20"}`} />
+              Aguardando pagamento...
+            </p>
+          </div>
+        )}
+
+        {/* Step: card redirect */}
+        {step === "card_redirect" && (
+          <div className="text-center space-y-4 py-4">
+            <div className="text-4xl">💳</div>
+            <p className="text-white font-bold">Checkout aberto em nova aba</p>
+            <p className="text-sm text-white/50">Complete o pagamento na página do Mercado Pago. Assim que aprovado, sua chave será enviada no WhatsApp.</p>
+            <p className="text-xs text-white/30 flex items-center justify-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              Aguardando confirmação...
+            </p>
+          </div>
+        )}
+
+        {/* Step: success */}
+        {step === "success" && (
+          <div className="text-center space-y-4 py-4">
+            <div className="w-16 h-16 rounded-full bg-[#22c55e]/20 flex items-center justify-center mx-auto">
+              <CheckCircle2 size={32} className="text-[#22c55e]" />
+            </div>
+            <p className="text-white font-extrabold text-lg">Pagamento confirmado! 🎉</p>
+            <p className="text-sm text-white/60">
+              Sua chave de ativação foi enviada para o WhatsApp <span className="text-white font-bold">{whatsapp}</span>.
+            </p>
+            <p className="text-xs text-white/40">Instale o programa, abra a tela de ativação e cole a chave recebida.</p>
+            <a
+              href={DOWNLOAD_URL}
+              className="block w-full text-center bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm py-3 rounded-xl transition-all"
+            >
+              Baixar Lead Machine PRO
+            </a>
+          </div>
+        )}
+
+        {/* Step: error */}
+        {step === "error" && (
+          <div className="text-center space-y-4 py-4">
+            <div className="text-4xl">⚠️</div>
+            <p className="text-white font-bold">Algo deu errado</p>
+            <p className="text-sm text-white/50">{errorMsg}</p>
+            <button onClick={() => setStep("form")} className="w-full border border-white/20 text-white/70 text-sm py-3 rounded-xl hover:border-white/40 transition-all">
+              Tentar novamente
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 type BillingCycle = "mensal" | "trimestral" | "anual";
 
@@ -613,6 +871,7 @@ const prices: Record<string, Record<BillingCycle, string>> = {
 
 function Pricing() {
   const [billing, setBilling] = useState<BillingCycle>("mensal");
+  const [checkout, setCheckout] = useState<{ plan: string; name: string } | null>(null);
 
   const plans = [
     {
@@ -766,21 +1025,29 @@ function Pricing() {
                 </ul>
 
                 {plan.ctaVariant === "solid" ? (
-                  <a
-                    href={plan.ctaLink}
+                  <button
+                    onClick={() => setCheckout({ plan: plan.key, name: plan.name })}
                     data-testid={`plan-cta-${plan.key}`}
-                    className="w-full text-center bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95 block"
+                    className="w-full text-center bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95"
                   >
                     {plan.cta}
-                  </a>
-                ) : plan.ctaVariant === "outline" ? (
+                  </button>
+                ) : plan.key === "free" ? (
                   <a
-                    href={plan.ctaLink}
+                    href={DOWNLOAD_URL}
                     data-testid={`plan-cta-${plan.key}`}
                     className="w-full text-center border border-[#22c55e]/50 hover:border-[#22c55e] text-[#22c55e] font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95 block"
                   >
                     {plan.cta}
                   </a>
+                ) : plan.ctaVariant === "outline" ? (
+                  <button
+                    onClick={() => setCheckout({ plan: plan.key, name: plan.name })}
+                    data-testid={`plan-cta-${plan.key}`}
+                    className="w-full text-center border border-[#22c55e]/50 hover:border-[#22c55e] text-[#22c55e] font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95"
+                  >
+                    {plan.cta}
+                  </button>
                 ) : (
                   <div className="w-full text-center bg-white/5 text-white/30 text-sm py-3 rounded-xl cursor-default">
                     {plan.cta}
@@ -792,13 +1059,23 @@ function Pricing() {
 
           <motion.p variants={fadeUp} className="text-center text-white/30 text-sm mt-8">
             <Shield size={12} className="inline mr-1.5" />
-            Pagamento feito dentro do programa via Mercado Pago (Pix ou cartão).
+            Pagamento via Mercado Pago (Pix instantâneo ou cartão de crédito).
             <span className="ml-2 text-white/40">
-              Tem um código de desconto? Digite no programa após instalar.
+              Chave de ativação enviada no WhatsApp após confirmação.
             </span>
           </motion.p>
         </AnimatedSection>
       </div>
+
+      {checkout && (
+        <CheckoutModal
+          plan={checkout.plan}
+          billing={billing}
+          planName={checkout.name}
+          price={prices[checkout.plan]?.[billing] ?? ""}
+          onClose={() => setCheckout(null)}
+        />
+      )}
     </section>
   );
 }
