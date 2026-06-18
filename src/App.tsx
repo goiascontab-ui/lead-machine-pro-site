@@ -1071,9 +1071,15 @@ function Footer() {
             </a>
           </div>
 
-          <p className="text-xs text-white/20">
-            &copy; {new Date().getFullYear()} Lead Machine PRO. Todos os direitos reservados.
-          </p>
+          <div className="flex flex-col items-center md:items-end gap-1">
+            <p className="text-xs text-white/20">
+              &copy; {new Date().getFullYear()} Lead Machine PRO. Todos os direitos reservados.
+            </p>
+            <div className="flex gap-4 text-xs text-white/30">
+              <a href="/privacidade.html" className="hover:text-white/60 transition-colors">Política de Privacidade</a>
+              <a href="/termos.html" className="hover:text-white/60 transition-colors">Termos de Uso</a>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
