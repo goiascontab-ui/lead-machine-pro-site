@@ -606,10 +606,9 @@ function Benefits() {
 type BillingCycle = "mensal" | "trimestral" | "anual";
 
 const prices: Record<string, Record<BillingCycle, string>> = {
-  free: { mensal: "R$ 0", trimestral: "R$ 0", anual: "R$ 0" },
-  basic: { mensal: "R$ 59", trimestral: "R$ 149", anual: "R$ 419" },
-  pro: { mensal: "R$ 97", trimestral: "R$ 247", anual: "R$ 697" },
-  promax: { mensal: "R$ 147", trimestral: "R$ 375", anual: "R$ 1.067" },
+  free:  { mensal: "R$ 0",   trimestral: "R$ 0",   anual: "R$ 0"   },
+  pro:   { mensal: "R$ 47",  trimestral: "R$ 117",  anual: "R$ 397" },
+  promax:{ mensal: "R$ 97",  trimestral: "R$ 247",  anual: "R$ 697" },
 };
 
 function Pricing() {
@@ -621,47 +620,34 @@ function Pricing() {
       name: "Grátis",
       popular: false,
       features: [
-        "Cadastro de clientes",
+        "Cadastro de clientes (CRM)",
         "Agendamento com lembrete",
-        "Aviso de aniversário",
+        "Aviso de aniversário automático",
         "Cobrança automática",
         "1 WhatsApp conectado",
-        "Buscar até 20 contatos/dia",
-        "Enviar até 30 mensagens/dia",
+        "Ver até 10 contatos encontrados/dia",
+        "Enviar até 10 mensagens/dia",
       ],
       cta: "Baixar Grátis",
       ctaLink: DOWNLOAD_URL,
       ctaVariant: "outline",
     },
     {
-      key: "basic",
-      name: "Básico",
-      popular: false,
-      features: [
-        "Tudo do Grátis",
-        "Sem limite de automações ativas",
-        "Buscar até 50 contatos/dia",
-        "Enviar até 50 mensagens/dia",
-      ],
-      cta: "Disponível no programa",
-      ctaVariant: "muted",
-    },
-    {
       key: "pro",
       name: "Pro",
       popular: true,
       features: [
-        "Tudo do Básico",
-        "2 WhatsApps conectados",
-        "Buscar até 200 contatos/dia",
-        "Enviar até 200 mensagens/dia",
-        "Resposta automática",
-        "Mensagens de follow-up",
+        "Tudo do Grátis",
+        "Busca ilimitada de contatos",
+        "Envio ilimitado de mensagens",
+        "Automações sem limite",
         "Relatório de resultados",
         "Importar lista (Excel)",
+        "Suporte pelo WhatsApp",
       ],
-      cta: "Disponível no programa",
-      ctaVariant: "muted",
+      cta: "Assinar Pro",
+      ctaLink: DOWNLOAD_URL,
+      ctaVariant: "solid",
     },
     {
       key: "promax",
@@ -670,12 +656,12 @@ function Pricing() {
       features: [
         "Tudo do Pro",
         "3 WhatsApps conectados",
-        "Busca ilimitada de contatos",
-        "Envio ilimitado de mensagens",
+        "Ideal para agências e revendedores",
         "Suporte prioritário",
       ],
-      cta: "Disponível no programa",
-      ctaVariant: "muted",
+      cta: "Assinar Pro Max",
+      ctaLink: DOWNLOAD_URL,
+      ctaVariant: "outline",
     },
   ];
 
@@ -717,6 +703,11 @@ function Pricing() {
                   }`}
                 >
                   {c.label}
+                  {c.key === "trimestral" && (
+                    <span className="ml-1.5 text-[10px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold">
+                      -17%
+                    </span>
+                  )}
                   {c.key === "anual" && (
                     <span className="ml-1.5 text-[10px] bg-yellow-500 text-black px-1.5 py-0.5 rounded-full font-bold">
                       -30%
@@ -774,11 +765,19 @@ function Pricing() {
                   ))}
                 </ul>
 
-                {plan.ctaVariant === "outline" ? (
+                {plan.ctaVariant === "solid" ? (
                   <a
                     href={plan.ctaLink}
                     data-testid={`plan-cta-${plan.key}`}
-                    className="w-full text-center bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95"
+                    className="w-full text-center bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95 block"
+                  >
+                    {plan.cta}
+                  </a>
+                ) : plan.ctaVariant === "outline" ? (
+                  <a
+                    href={plan.ctaLink}
+                    data-testid={`plan-cta-${plan.key}`}
+                    className="w-full text-center border border-[#22c55e]/50 hover:border-[#22c55e] text-[#22c55e] font-bold text-sm py-3 rounded-xl transition-all hover:scale-105 active:scale-95 block"
                   >
                     {plan.cta}
                   </a>
@@ -908,7 +907,7 @@ function FAQ() {
     },
     {
       q: "Posso usar mais de um numero de WhatsApp?",
-      a: "Sim! No plano Grátis você conecta 1 número. No plano Pro você conecta 2 números ao mesmo tempo. No Pro Max, até 3 números.",
+      a: "Sim! No plano Grátis e Pro você conecta 1 número de WhatsApp. No plano Pro Max você conecta até 3 números ao mesmo tempo — ideal para agências.",
     },
     {
       q: "Como faço o pagamento dos planos pagos?",
